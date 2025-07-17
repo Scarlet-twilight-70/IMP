@@ -1,0 +1,97 @@
+package com.sbi.tcs.vlp;
+
+import org.json.*;
+import java.io.*;
+import java.net.*;
+import java.security.cert.*;
+import java.nio.charset.StandardCharsets;
+import javax.net.ssl.*;
+import java.util.*;
+import com.ibm.broker.javacompute.MbJavaComputeNode;
+import com.ibm.broker.plugin.MbElement;
+import com.ibm.broker.plugin.MbException;
+import com.ibm.broker.plugin.MbJSON;
+import com.ibm.broker.plugin.MbMessage;
+import com.ibm.broker.plugin.MbMessageAssembly;
+import com.ibm.broker.plugin.MbOutputTerminal;
+import com.ibm.broker.plugin.MbUserException;
+
+public class ThirdPartyGenericVLP_sys_JavaCompute extends MbJavaComputeNode {
+
+	public void evaluate(MbMessageAssembly inAssembly) throws MbException {
+		MbOutputTerminal out = getOutputTerminal("out");
+		MbOutputTerminal alt = getOutputTerminal("alternate");
+
+		MbMessage inMessage = inAssembly.getMessage();
+		MbMessageAssembly outAssembly = null;
+		MbMessage environment = inAssembly.getGlobalEnvironment();
+		try {
+			// String file = "/tmp/RSBIN260920230010.XML";
+			// create new message as a copy of the input
+			MbMessage outMessage = new MbMessage(inMessage);
+			outAssembly = new MbMessageAssembly(inAssembly, outMessage);
+			outMessage.getRootElement().getLastChild().delete();
+			MbElement outRoot = outMessage.getRootElement();
+			String document = environment.getRootElement().getFirstElementByPath("/document").getValueAsString();
+			byte[] decoded = Base64.getDecoder().decode(document);
+			String ORG_DOC = new String(decoded, StandardCharsets.UTF_8);
+			String document_name = environment.getRootElement().getFirstElementByPath("/document_name").getValueAsString();
+			String userid = environment.getRootElement().getFirstElementByPath("/userid").getValueAsString();
+			String password = environment.getRootElement().getFirstElementByPath("/password").getValueAsString();
+			// -------------------CONNECTION------------------------//
+			String URL = "https://siwebuat.sbi.co.in:7443/gen5/gateway/RestFileDownloadAPI/service/postUploadResponse";
+			// URL = "https://www.uat.vidyalakshmi.co.in/RestFileDownloadAPI/service/postUploadResponse";
+			HttpsURLConnection CONN = (HttpsURLConnection) new URL(URL).openConnection();
+			// -------------------CONNECTION------------------------//
+			String boundary = "------------------------" + System.currentTimeMillis() + "VLP";
+			CONN.setDoOutput(true);
+			CONN.setRequestMethod("POST");
+			CONN.setConnectTimeout(10000);
+			// CONN.setRequestProperty("Content-Type", "application/json");
+			CONN.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+			OutputStream outputStream = CONN.getOutputStream();
+			String name = document_name;
+			String user = userid;
+			String password1 = password;
+			PrintWriter writer = new PrintWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8), true);
+			// ----------------------------Creating request----------------------//
+			writer.append("--" + boundary).append("\r\n");
+			writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"" + name + "\"").append("\r\n");
+			writer.append("Content-Type: application/xml").append("\r\n\r\n");
+			writer.flush();
+			writer.append(ORG_DOC).append("\r\n");
+			writer.append("--" + boundary).append("\r\n");
+			writer.append("Content-Disposition: form-data; name=\"bodyParam\"").append("\r\n\r\n");
+			writer.append("{\"userid\":\"").append(user).append("\",\"password\":\"").append(password1)
+					.append("\"}\r\n");
+			writer.append("--" + boundary).append("--\r\n");
+			writer.close();
+			System.out.println(outputStream.toString());
+			InputStream resp = CONN.getInputStream();
+			BufferedReader res = new BufferedReader(new InputStreamReader(resp));
+			StringBuilder result = new StringBuilder();
+			String newLine = System.getProperty("line.separator");
+			String line = null;
+			while ((line = res.readLine()) != null) {
+				if (result.length() > 0) {
+					result.append(newLine);
+				}
+				result.append(line);
+			}
+			res.close();
+			environment.getRootElement().createElementAsLastChild(MbElement.TYPE_NAME_VALUE, "Message",result.toString());
+			// ----------------------------Creating request----------------------//
+		} catch (java.net.SocketTimeoutException e) {
+			throw new MbUserException(this, "evaluate()", "", "", "ERROR in 10 sec".toString(), null);
+		} catch (Exception e) {
+			// Consider replacing Exception with type(s) thrown by user code
+			// Example handling ensures all exceptions are re-thrown to be handled in the
+			// flow
+			throw new MbUserException(this, "evaluate()", "", "", e.toString(), null);
+		}
+		// The following should only be changed
+		// if not propagating message to the 'out' terminal
+		out.propagate(outAssembly);
+
+	}
+}
