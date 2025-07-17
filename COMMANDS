@@ -1,0 +1,52 @@
+convert .pem to JKS
+
+openssl pkcs12 -in Signer.pfx -out NSDL_02112023.pem
+openssl pkcs12 -export -in NSDL_02112023.pem -out mykeystore_NSDL.p12 -name "NSDL_02112023"
+keytool -v -list -keystore mykeystore_NSDL.p12 -storetype pkcs12
+keytool -importkeystore -srckeystore mykeystore_NSDL.p12 -destkeystore PAN_NSDL_jk.jks -srcstoretype pkcs12 -deststoretype JKS
+
+
+Convert pfx to jks
+
+openssl pkcs12 -in EIS_ENC.pfx -out EIS_ENC.pem
+openssl pkcs12 -export -in EIS_ENC.pem -out EIS_ENC.p12 -name "eisprisituat"
+keytool -v -list -keystore EIS_ENC.p12 -storetype pkcs12
+keytool -importkeystore -srckeystore EIS_ENC.p12 -destkeystore EIS_ENC.jks -srcstoretype pkcs12 -deststoretype JKS
+
+Convert cer from pfx
+
+openssl pkcs12 -in EIS_ENC.pfx -out EIS_ENC.crt -nokeys -clcerts
+openssl x509 -inform pem -in EIS_ENC.crt -outform der -out EIS_ENC.cer
+
+We can either use runmqckm / runmqakm
+
+1. Create KDB file
+    runmqckm -keydb -create -db filename -pw password -type cms -stash
+
+
+2. Import a .cer file into KDB
+    runmqckm -cert -add -db MQkey.kdb -pw password -label IMPS_SSL -file /tmp/IMPS_SSL.cer -format ascii
+
+
+3. Set MQ key repo of a broker
+mqsichangeproperties PAYMENT_SYS -o BrokerRegistry -n mqKeyRepository -v /opt/IBM/Keystore/mqKeystore/MQkey2
+
+
+4. Test if we can use queue on remote server using client channel
+/opt/mqm/samp/bin/amqssslc -m SBIAPPGW -c EIS.SSLCHL -x '10.189.114.144(2047)' -k "/opt/IBM/Keystore/mqKeystore/MQkey" -s TLS_RSA_WITH_AES_256_CBC_SHA256
+
+import key to jks
+
+---------------generate pem
+openssl pkcs12 -in /tmp/ENC_EIS_UAT.pfx -out ENC_EIS_UAT_18112023.pem
+---------------generate p12
+openssl pkcs12 -export -in /tmp/ENC_EIS_UAT_18112023.pem -out ENC_EIS_UAT_18112023.p12 -name "eispriuatsit"
+---------------Delete old alias from jks
+keytool -delete -noprompt -alias eispriuatsit -keystore /opt/IBM/Keystore/keyStore.jks -storepass password
+---------------import p12 in jks
+keytool -importkeystore -deststorepass password -destkeystore /opt/IBM/Keystore/keyStore.jks -srckeystore /tmp/ENC_EIS_UAT_18112023.p12 -srcstoretype PKCS12
+---------------list jks
+keytool -v -list -keystore /opt/IBM/Keystore/keyStore.jks -storepass password | grep eispriuatsit -A 10 -B 5
+
+
+
