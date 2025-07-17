@@ -50,3 +50,35 @@ keytool -v -list -keystore /opt/IBM/Keystore/keyStore.jks -storepass password | 
 
 
 
+
+##############################################################################################################################################
+Certificate creation
+
+ openssl genrsa 2048 > self_privatekey.pem
+ ls
+ cat self_privatekey.pem
+ openssl req -new -key self_privatekey.pem -out csr.pem
+ ls
+ cat csr.pem
+ openssl x509 -req -days 365 -in csr.pem -signkey self_privatekey.pem -out public.crt
+ openssl pkcs12 -export -out self.pfx -inkey self_privatekey.pem -in public.crt
+ ls
+ openssl pkcs12 -in self.pfx -out self_pub.crt -nokeys -clcerts
+ ls
+ openssl x509 -inform pem -in self_pub.crt -outform der -out self_public.cer
+ ls -lrth
+ mkdir selfcer
+ ls
+ ls -lrth
+ mv self_privatekey.pem csr.pem public.crt self.pfx self_pub.crt self_public.cer /selfcer
+ mv self_privatekey.pem csr.pem public.crt self.pfx self_pub.crt self_public.cer ./selfcer
+ ls
+ cd selfcer
+ ls
+ openssl pkcs12 -in self.pfx -out self_pri.pem
+ openssl pkcs12 -export -in self_pri.pem -out self_pri.p12 -name "eisdev"
+ keytool -v -list -keystore self_pri.p12 -storetype pkcs12
+ keytool -importkeystore -srckeystore self_pri.p12 -destkeystore self_pri.jks -srcstoretype pkcs12 -deststoretype JKS
+
+
+###############################################################################################################################################
